@@ -1,0 +1,114 @@
+name: Build installers
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: motionplug-installers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tag and create draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $VERSION." >&2
+            exit 1
+          fi
+          NOTES_FILE="RELEASE-$GITHUB_REF_NAME.md"
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "Missing release notes: $NOTES_FILE" >&2
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --draft --latest=false \
+              --title "Motion Plug $GITHUB_REF_NAME" --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "Motion Plug $GITHUB_REF_NAME" --notes-file "$NOTES_FILE"
+          fi
+
+  mac:
+    needs: [prepare-release]
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build updater archive and macOS installer
+        env:
+          MP_TARGET_PLATFORM: mac-universal
+        run: bash build-release.sh
+      - name: Upload on-demand artifacts
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-universal-artifacts
+          retention-days: 1
+          path: |
+            release/MotionPlug-v*.zip
+            release/MotionPlug-v*.zip.sha256
+            release/MotionPlug-v*-mac-universal.pkg
+            release/latest.json
+      - name: Stage tagged assets in the draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            release/MotionPlug-v*.zip \
+            release/MotionPlug-v*.zip.sha256 \
+            release/MotionPlug-v*-mac-universal.pkg \
+            release/latest.json --clobber
+
+  windows:
+    needs: [prepare-release]
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --no-progress -y
+      - name: Build Windows installer
+        shell: bash
+        env:
+          MP_TARGET_PLATFORM: win-x64
+          MP_SKIP_UPDATE_ARCHIVE: "1"
+        run: bash build-release.sh
+      - name: Upload on-demand artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-artifact
+          retention-days: 1
+          path: release/MotionPlug-Setup-*.exe
+      - name: Stage tagged asset in the draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" release/MotionPlug-Setup-*.exe --clobber

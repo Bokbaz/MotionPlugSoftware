@@ -1,0 +1,7 @@
+#!/bin/bash
+# Clear only Motion Plug's per-user CEP installation so removed runtime files
+# cannot linger across installer upgrades.
+
+EXTENSION="$HOME/Library/Application Support/Adobe/CEP/extensions/MotionPlug"
+rm -rf "$EXTENSION" 2>/dev/null || true
+exit 0

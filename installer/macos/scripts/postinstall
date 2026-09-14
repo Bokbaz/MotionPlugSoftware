@@ -1,0 +1,9 @@
+#!/bin/bash
+# Enable self-installed CEP panels for the current user. Motion Plug ships no
+# privileged service and does not need an administrator account.
+
+for version in 9 10 11 12 13 14 15; do
+  defaults write "com.adobe.CSXS.$version" PlayerDebugMode 1 2>/dev/null || true
+done
+killall cfprefsd 2>/dev/null || true
+exit 0

@@ -1,0 +1,77 @@
+{
+  "origin": "drive-download-20260913T121912Z-1-001",
+  "samples": [
+    {
+      "id": "airy",
+      "source": "ES_Classic, Airy - Epidemic Sound.mp3",
+      "startSeconds": 0.36,
+      "sourceDuration": 2.3,
+      "processing": "atempo=2.5,afade=t=in:d=0.004,afade=t=out:st=0.8500000000000001:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "airy.wav"
+    },
+    {
+      "id": "deep",
+      "source": "ES_Short, Deep, Dry - Epidemic Sound.mp3",
+      "startSeconds": 0.25,
+      "sourceDuration": 0.9,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.8300000000000001:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "deep.wav"
+    },
+    {
+      "id": "wind",
+      "source": "ES_Organic, Wind, Soft, Long 01 - Epidemic Sound.mp3",
+      "startSeconds": 0.05,
+      "sourceDuration": 1.2,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=1.13:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "wind.wav"
+    },
+    {
+      "id": "tap",
+      "source": "Textured Sound Effects/ES_Button, Double Click, Fast, Phone Tap - Epidemic Sound.mp3",
+      "startSeconds": 0,
+      "sourceDuration": 0.25,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.18:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "tap.wav"
+    },
+    {
+      "id": "select",
+      "source": "Textured Sound Effects/ES_Select, Smartphone, Short 01 - Epidemic Sound.mp3",
+      "startSeconds": 0,
+      "sourceDuration": 0.29,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.21999999999999997:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "select.wav"
+    },
+    {
+      "id": "complete",
+      "source": "Textured Sound Effects/ES_Completions, Melodic, Subtle - Epidemic Sound.mp3",
+      "startSeconds": 0,
+      "sourceDuration": 0.42,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.35:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "complete.wav"
+    },
+    {
+      "id": "menu",
+      "source": "Textured Sound Effects/ES_Short, Computer, Menu, Interactions, Transitions 09 - Epidemic Sound.mp3",
+      "startSeconds": 0,
+      "sourceDuration": 0.59,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.52:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "menu.wav"
+    },
+    {
+      "id": "pop",
+      "source": "Textured Sound Effects/ES_Software, Interface, Pop Up, Notification - Epidemic Sound.mp3",
+      "startSeconds": 0,
+      "sourceDuration": 0.57,
+      "processing": "anull,afade=t=in:d=0.004,afade=t=out:st=0.49999999999999994:d=0.07",
+      "peakNormalization": 0.8,
+      "output": "pop.wav"
+    }
+  ]
+}

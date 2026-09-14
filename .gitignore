@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+coverage/
+.DS_Store
+*.log
+assets/previews/*.mp4
+assets/previews/*.png
+assets/sfx/*.wav
+!assets/previews/.gitkeep
+!assets/sfx/.gitkeep
