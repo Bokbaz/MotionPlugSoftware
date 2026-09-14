@@ -4,7 +4,7 @@
 (function (global) {
   'use strict';
 
-  global.MP_VERSION = '0.3.1';
+  global.MP_VERSION = '0.4.0';
   /* The feed is served by the Caption Plug site deployment, which is where
    * Motion Plug's pages, checkout, and release storage already live.
    * motionplug.com is not pointed at that deployment, so it must not be the
