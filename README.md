@@ -23,7 +23,15 @@ The installed catalog contains 30 finished presets, two distinct variants in eac
 - Node.js and FFmpeg for building or installing from this source tree
 - Google Chrome/Chromium for regenerating preview videos and running browser checks
 
-The extension itself runs offline. It has no account, sign-in screen, license gate, cloud renderer, subscription, or API key. Its only network feature is the public, checksum-verified release updater.
+Rendering runs entirely offline: there is no cloud renderer, subscription, or API key, and every preset is produced on the machine.
+
+Two features reach the network. The panel signs in once per machine with the
+customer's captionplug.com account — the same account that holds their Motion
+Plug license — and caches a server-minted activation in `~/.motionplug`, after
+which it works offline; only the actions that put a graphic on the timeline are
+gated, so browsing and previewing presets never needs an account. Separately,
+the release updater polls a public, checksum-verified manifest and carries no
+account state at all.
 
 ## Install a user release
 

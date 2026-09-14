@@ -5,6 +5,7 @@ interface CSBridgeApi {
   evalScript(script: string): Promise<string>;
   require(id: string): any;
   extensionPath(): string;
+  openURL(address: string): void;
 }
 
 declare global {

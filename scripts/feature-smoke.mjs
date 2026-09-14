@@ -120,6 +120,104 @@ try {
   await host.evaluate(() => { window.testSize = null; window.dispatchEvent(new Event("focus")); });
   await host.waitForFunction(() => document.querySelector("[data-add]").disabled && document.querySelector("[data-timeline-size]").textContent.includes("Open an active sequence"));
   await host.close();
+
+  /* Account gate. A real panel has Node, so the sign-in overlay appears on a
+   * machine that has never signed in, gates the timeline actions, and clears
+   * once the server returns an activation. cep_node.require is shimmed with
+   * just enough of Node for the license module, and https is answered from a
+   * queue so no request leaves the machine. */
+  const account = await browser.newPage();
+  const accountErrors = [];
+  account.on("pageerror", (error) => accountErrors.push(error.message));
+  await account.evaluateOnNewDocument(() => {
+    window.__adobe_cep__ = {
+      evalScript(script, callback) {
+        callback(script === "MP_timelineContext()" ? "OK|25|1920|1080|0|sequence-1||Test|Timeline" : "ERR|No active sequence");
+      },
+      getSystemPath() { return ""; },
+    };
+    // Buffer is a Node global inside a CEP panel; the license module builds
+    // its request body with it.
+    window.Buffer = { from: (value) => ({ length: value.length, toString: () => value }) };
+    const files = new Map();
+    const modules = {
+      fs: {
+        existsSync: (target) => files.has(target) || target === "/home/user" || target === "/home/user/.motionplug",
+        mkdirSync() {},
+        readFileSync(target) { if (!files.has(target)) throw new Error("ENOENT"); return files.get(target); },
+        writeFileSync(target, value) { files.set(target, value); },
+        unlinkSync(target) { files.delete(target); },
+      },
+      path: {
+        join: (...parts) => parts.join("/"),
+        dirname: (value) => value.split("/").slice(0, -1).join("/") || "/",
+      },
+      os: { homedir: () => "/home/user", hostname: () => "studio.local", platform: () => "darwin" },
+      crypto: {
+        randomBytes: () => ({ toString: () => "a".repeat(64) }),
+        createHash: () => { const hash = { update: () => hash, digest: () => "e".repeat(64) }; return hash; },
+      },
+      url: { parse: (value) => ({ protocol: "https:", hostname: "example.test", port: null, path: new URL(value).pathname }) },
+      https: {
+        request(options, onResponse) {
+          return {
+            write() {}, abort() {}, setTimeout() {}, on() { return this; },
+            end() {
+              window.signInRequests = (window.signInRequests ?? 0) + 1;
+              const handlers = {};
+              onResponse({ statusCode: 200, on(event, callback) { handlers[event] = callback; return this; } });
+              handlers.data(JSON.stringify({
+                ok: true, email: "editor@studio.com", product: "motion_plug",
+                licenseKey: "MP-ABCDE-FGHJK-MNPQR-STVWX-YZ012",
+                signature: "d".repeat(64), activationsUsed: 1, activationLimit: 3,
+              }));
+              handlers.end();
+            },
+          };
+        },
+      },
+    };
+    window.cep_node = { require: (name) => { if (!modules[name]) throw new Error(`no module ${name}`); return modules[name]; } };
+  });
+  await account.setViewport({ width: 390, height: 820 });
+  await account.goto(pathToFileURL(path.join(root, "dist", "index.html")).href);
+  await account.waitForSelector("#account-gate");
+  await account.screenshot({ path: path.join(output, "account-gate.png"), fullPage: true });
+
+  // Dismissed, the panel still browses and previews - only output is gated.
+  await account.click("[data-gate-dismiss]");
+  await account.waitForFunction(() => !document.querySelector("#account-gate"));
+  await account.click(".preset-card__select");
+  await account.waitForSelector(".preview-host.is-ready");
+  await account.waitForFunction(() => document.querySelector(".action-bar__status span").textContent.includes("Sign in"));
+  await account.click("[data-add]");
+  await account.waitForSelector("#account-gate");
+
+  await account.type("#account-email", "editor@studio.com");
+  await account.type("#account-password", "correct horse");
+  await account.click("[data-gate-submit]");
+  await account.waitForFunction(
+    () => !document.querySelector("#account-gate") ||
+      !document.querySelector("[data-gate-error]").classList.contains("is-hidden"),
+  );
+  const gateError = await account.$eval("[data-gate-error]", (element) => element.textContent).catch(() => "");
+  assert.equal(gateError, "", `Sign-in failed in the panel: ${gateError}`);
+  assert.equal(await account.evaluate(() => window.signInRequests), 1);
+  assert.equal(
+    await account.evaluate(() => JSON.parse(window.CSBridge.require("fs").readFileSync("/home/user/.motionplug/license.json")).email),
+    "editor@studio.com",
+  );
+  await account.waitForFunction(() => !document.querySelector(".action-bar__status span").textContent.includes("Sign in"));
+  await account.click("[data-back]");
+  await account.waitForSelector(".account-strip.is-signed-in");
+  assert.match(
+    await account.$eval("[data-account-text]", (element) => element.textContent),
+    /editor@studio\.com/,
+  );
+  await account.screenshot({ path: path.join(output, "account-signed-in.png"), fullPage: true });
+  assert.deepEqual(accountErrors, []);
+  await account.close();
+
   assert.deepEqual(errors, []);
-  console.log("Feature smoke passed: category navigation, live color, TTF/OTF import, persistence, bracket colors, transparent export, and synchronized SFX.");
+  console.log("Feature smoke passed: category navigation, live color, TTF/OTF import, persistence, bracket colors, transparent export, synchronized SFX, and the account sign-in gate.");
 } finally { await browser.close(); }

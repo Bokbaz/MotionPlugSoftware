@@ -26,6 +26,24 @@ interface MotionPlugUpdateInfo {
   restartPending: boolean;
 }
 
+interface MotionPlugSignInError extends Error {
+  /** 'no-license' (no Motion Plug purchase) or 'revoked' (refunded). */
+  code?: string;
+}
+
+interface MotionPlugLicense {
+  available(): boolean;
+  ok(): boolean;
+  email(): string;
+  machineLabel(): string;
+  onChange(listener: () => void): void;
+  signIn(email: string, password: string, callback: (error: MotionPlugSignInError | null) => void): void;
+  revalidate(onSignedOut?: (message: string) => void): void;
+  reset(): void;
+  accountUrl(pathname?: string): string;
+  init(): boolean;
+}
+
 interface MotionPlugUpdater {
   check(manual: boolean, callback?: (error: Error | null, info?: MotionPlugUpdateInfo) => void): boolean;
   install(info: MotionPlugUpdateInfo, onProgress: (percent: number) => void, callback: (error: Error | null, summary?: { version: string }) => void): void;
@@ -36,7 +54,9 @@ interface MotionPlugUpdater {
 declare global {
   interface Window {
     MP_VERSION?: string;
+    MP_API_BASE?: string;
     MotionPlugUpdater?: MotionPlugUpdater;
+    MotionPlugLicense?: MotionPlugLicense;
   }
 }
 
@@ -85,6 +105,8 @@ let audioGeneration = 0;
 let hostAvailable = false;
 let busy = false;
 let variationEditorOpen = false;
+let signedIn = false;
+let signInBusy = false;
 let availableUpdate: MotionPlugUpdateInfo | undefined;
 let updateOperationBusy = false;
 let announcedUpdateVersion = "";
@@ -209,6 +231,16 @@ function familyGroupsMarkup(items: PresetDefinition[]): string {
   }).join("");
 }
 
+function accountStripMarkup(): string {
+  // Outside Premiere there is no Node, so there is no account layer at all.
+  if (!licenseApi()) return "";
+  return `<div class="account-strip" data-account-strip>
+    <span class="account-strip__dot"></span>
+    <span class="account-strip__text" data-account-text>Checking your account…</span>
+    <button class="quiet-button" data-account-action>Sign in</button>
+  </div>`;
+}
+
 function appUpdateButtonMarkup(): string {
   return `<button type="button" class="app-update-button" data-install-app-update hidden>${icon("update")} <span>Update</span></button>`;
 }
@@ -238,7 +270,10 @@ function libraryMarkup(): string {
         <div class="section-heading"><div><p>Library</p><h1 id="library-heading">${escapeHtml(filterLabel)}</h1></div><span>${count} ${count === 1 ? "item" : "items"}</span></div>
         ${scope === "variations" ? variationMarkup() : items.length ? familyGroupsMarkup(items) : emptyMarkup(search ? "Try a broader name, family, category, or tag." : "Use the heart on a preset to keep it close.", search ? "No matching presets" : undefined)}
       </section>
-      <footer class="library-footer"><span>v${escapeHtml(window.MP_VERSION ?? "0.3.0")} · 30 presets · Offline</span><div><button class="quiet-button" data-check-updates ${hostAvailable ? "" : "disabled"}>Check for updates</button><button class="quiet-button" data-load-selected>${icon("update")} Edit timeline selection</button></div></footer>
+      <footer class="library-footer">
+        ${accountStripMarkup()}
+        <div class="library-footer__meta"><span>v${escapeHtml(window.MP_VERSION ?? "0.3.0")} · 30 presets · Offline</span><div><button class="quiet-button" data-check-updates ${hostAvailable ? "" : "disabled"}>Check for updates</button><button class="quiet-button" data-load-selected>${icon("update")} Edit timeline selection</button></div></div>
+      </footer>
     </main>`;
 }
 
@@ -371,6 +406,8 @@ function render(): void {
   view === "library" ? bindLibrary() : bindDetail();
   bindUpdaterActions();
   refreshUpdaterUi();
+  bindAccountActions();
+  refreshAccountUi();
 }
 
 function bindLibrary(): void {
@@ -409,6 +446,139 @@ function bindLibrary(): void {
   }));
   document.querySelector<HTMLButtonElement>("[data-load-selected]")?.addEventListener("click", () => void loadTimelineSelection());
   bindCardKeyboard();
+}
+
+/* ------------------------------ account ---------------------------------- */
+
+/**
+ * The account layer, or undefined where it cannot run: outside Premiere, or in
+ * a CEP panel without Node. Every account path goes through this, so those
+ * cases simply have no account layer rather than a gate nobody can pass.
+ */
+function licenseApi(): MotionPlugLicense | undefined {
+  if (!hostAvailable) return undefined;
+  const license = window.MotionPlugLicense;
+  if (!license) return undefined;
+  try { return license.available() ? license : undefined; }
+  catch { return undefined; }
+}
+
+function bindAccountActions(): void {
+  document.querySelector<HTMLButtonElement>("[data-account-action]")
+    ?.addEventListener("click", () => (signedIn ? signOutOfAccount() : openSignInGate()));
+}
+
+function refreshAccountUi(): void {
+  const strip = document.querySelector<HTMLElement>("[data-account-strip]");
+  if (!strip) return;
+  const text = strip.querySelector<HTMLElement>("[data-account-text]");
+  const action = strip.querySelector<HTMLButtonElement>("[data-account-action]");
+  strip.classList.toggle("is-signed-in", signedIn);
+  const email = licenseApi()?.email() ?? "";
+  if (text) text.textContent = signedIn ? `Signed in as ${email || "your account"}` : "Not signed in on this machine";
+  if (action) action.textContent = signedIn ? "Sign out" : "Sign in";
+  updateActionAvailability();
+}
+
+function signOutOfAccount(): void {
+  const license = licenseApi();
+  if (!license) return;
+  const confirmed = window.confirm(
+    "Sign out of Motion Plug on this machine?\n\n" +
+    "This machine keeps its activation slot until you free it from your account page.",
+  );
+  if (!confirmed) return;
+  license.reset();
+  announce("Signed out on this machine.", "neutral");
+}
+
+function closeSignInGate(): void {
+  document.querySelector("#account-gate")?.remove();
+}
+
+/**
+ * The sign-in overlay. Dismissable on purpose: browsing presets and previewing
+ * them costs nothing, so only the actions that put a graphic on the timeline
+ * are gated (see requireAccount).
+ */
+function openSignInGate(): void {
+  const license = licenseApi();
+  if (!license || license.ok() || document.querySelector("#account-gate")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "account-gate";
+  overlay.className = "busy-overlay account-gate";
+  overlay.innerHTML = `<div class="account-gate__card" role="dialog" aria-label="Sign in to Motion Plug" aria-modal="true">
+    <span class="account-gate__mark"><img src="icons/motionplug-logo.png" alt="" /></span>
+    <strong>Sign in to your account</strong>
+    <small>Use the email and password from your captionplug.com account — the one you bought Motion Plug with. One-time step on this machine; your license covers 3 machines.</small>
+    <label class="field field--wide" for="account-email"><span>Email</span><input id="account-email" type="email" autocomplete="username" spellcheck="false" placeholder="you@studio.com" /></label>
+    <label class="field field--wide" for="account-password"><span>Password</span><input id="account-password" type="password" autocomplete="current-password" placeholder="Your password" /></label>
+    <p class="account-gate__error is-hidden" data-gate-error role="alert"></p>
+    <div class="account-gate__links">
+      <button class="quiet-button" type="button" data-gate-reset>Forgot password?</button>
+      <button class="quiet-button" type="button" data-gate-pricing>Get Motion Plug</button>
+    </div>
+    <div class="account-gate__actions">
+      <button class="quiet-button" type="button" data-gate-dismiss>Not now</button>
+      <button class="primary-small" type="button" data-gate-submit>Sign in</button>
+    </div>
+    <p class="account-gate__foot">This machine: ${escapeHtml(license.machineLabel())} · works offline once signed in · your password is never stored</p>
+  </div>`;
+  document.body.append(overlay);
+
+  const emailField = overlay.querySelector<HTMLInputElement>("#account-email");
+  const passwordField = overlay.querySelector<HTMLInputElement>("#account-password");
+  const errorField = overlay.querySelector<HTMLElement>("[data-gate-error]");
+  const submit = overlay.querySelector<HTMLButtonElement>("[data-gate-submit]");
+
+  function showError(message: string): void {
+    if (!errorField) return;
+    errorField.textContent = message;
+    errorField.classList.remove("is-hidden");
+  }
+
+  const attempt = (): void => {
+    if (signInBusy || !submit) return;
+    errorField?.classList.add("is-hidden");
+    signInBusy = true;
+    submit.disabled = true;
+    submit.textContent = "Signing in…";
+    license.signIn(emailField?.value ?? "", passwordField?.value ?? "", (error) => {
+      signInBusy = false;
+      submit.disabled = false;
+      submit.textContent = "Sign in";
+      if (error) {
+        showError(error.code === "no-license"
+          ? `${error.message} Buy it once at captionplug.com/motion-plug, then sign in again.`
+          : error.message);
+        return;
+      }
+      closeSignInGate();
+      announce(`Signed in as ${license.email()} on ${license.machineLabel()}.`, "success", 7000);
+    });
+  };
+
+  overlay.querySelector<HTMLButtonElement>("[data-gate-submit]")?.addEventListener("click", attempt);
+  overlay.querySelector<HTMLButtonElement>("[data-gate-dismiss]")?.addEventListener("click", closeSignInGate);
+  overlay.querySelector<HTMLButtonElement>("[data-gate-reset]")
+    ?.addEventListener("click", () => window.CSBridge?.openURL(license.accountUrl("/reset")));
+  overlay.querySelector<HTMLButtonElement>("[data-gate-pricing]")
+    ?.addEventListener("click", () => window.CSBridge?.openURL(license.accountUrl("/motion-plug")));
+  [emailField, passwordField].forEach((field) => field?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") attempt();
+  }));
+  emailField?.focus();
+}
+
+/** Gate for the actions that produce output. True = signed in, go ahead. */
+function requireAccount(): boolean {
+  const license = licenseApi();
+  if (!license) return true; // outside Premiere the host check reports first
+  if (license.ok()) return true;
+  announce("Sign in with your captionplug.com account first — a one-time step on this machine.", "neutral", 7000);
+  openSignInGate();
+  return false;
 }
 
 function bindUpdaterActions(): void {
@@ -583,6 +753,9 @@ function updateActionAvailability(): void {
   const status = document.querySelector<HTMLElement>(".action-bar__status span");
   if (!status) return;
   if (!hostAvailable) status.textContent = "Preview mode · Premiere required";
+  // The Add/Update buttons stay clickable when signed out: the click opens the
+  // sign-in gate, which explains the one-time step better than a dead button.
+  else if (licenseApi() && !signedIn) status.textContent = "Sign in to add graphics to the timeline";
   else if (!timelineContext) status.textContent = timelineError || "Reading active sequence";
   else if (busy) status.textContent = "Preparing timeline media";
   else if (previewReady) status.textContent = "Renderer ready · Premiere connected";
@@ -925,6 +1098,7 @@ function updateProgress(progress: WorkflowProgress): void {
 async function runWorkflow(mode: "add" | "update"): Promise<void> {
   if (busy) return;
   if (!hostAvailable) return announce("Open Motion Plug inside Premiere to add a graphic.", "neutral");
+  if (!requireAccount()) return;
   if (!workflow || !previewReady) return announce("The animation renderer is not ready. Retry the live preview first.", "error");
   busy = true;
   stopAudio();
@@ -969,6 +1143,11 @@ document.addEventListener("keydown", (event) => {
     if (view !== "library") { view = "library"; render(); }
     document.querySelector<HTMLInputElement>("#preset-search")?.focus();
   }
+  if (event.key === "Escape" && document.querySelector("#account-gate")) {
+    event.preventDefault();
+    closeSignInGate();
+    return;
+  }
   if (event.key === "Escape" && view === "detail" && !busy) { view = "library"; render(); }
 });
 
@@ -980,7 +1159,30 @@ window.addEventListener("unload", () => {
 });
 
 try { hostAvailable = hostIsAvailable(); } catch { hostAvailable = false; }
+
+const license = licenseApi();
+if (license) {
+  try { signedIn = license.init(); }
+  catch { signedIn = false; }
+  license.onChange(() => {
+    signedIn = license.ok();
+    refreshAccountUi();
+    if (!signedIn) openSignInGate();
+  });
+}
+
 render();
+
+if (license) {
+  if (signedIn) {
+    // A refund revokes the license row on the website; this is where that
+    // reaches the panel, as an explicit 403 that signs this machine out.
+    license.revalidate((message) => announce(message, "error", 14_000));
+  } else {
+    openSignInGate();
+  }
+}
+
 if (hostAvailable && window.MotionPlugUpdater) {
   window.MotionPlugUpdater.startAutoChecks((error, info) => acceptUpdateCheck(error, info, false));
 }

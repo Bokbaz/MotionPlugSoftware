@@ -11,6 +11,7 @@ const required = [
   "index.html",
   "cs-bridge.js",
   "version.js",
+  "license.js",
   "update-transaction.js",
   "updater.js",
   "main.js",
@@ -65,7 +66,7 @@ const hostScript = await readFile(path.join(dist, "jsx", "host.jsx"), "utf8");
 if (!mainBundle.includes("MP_timelineContext") || !mainBundle.includes("CSBridge")) {
   throw new Error("The panel bundle does not contain the CEP host adapter.");
 }
-const orderedScripts = ["cs-bridge.js", "version.js", "update-transaction.js", "updater.js", "main.js"];
+const orderedScripts = ["cs-bridge.js", "version.js", "license.js", "update-transaction.js", "updater.js", "main.js"];
 let previousScriptIndex = -1;
 for (const script of orderedScripts) {
   const scriptIndex = indexHtml.indexOf(script);
@@ -78,6 +79,7 @@ if (!bridgeBundle.includes("__adobe_cep__.evalScript") || !hostScript.includes("
 new vm.Script(bridgeBundle, { filename: "cs-bridge.js" });
 new vm.Script(hostScript, { filename: "host.jsx" });
 new vm.Script(versionScript, { filename: "version.js" });
+new vm.Script(await readFile(path.join(dist, "license.js"), "utf8"), { filename: "license.js" });
 new vm.Script(await readFile(path.join(dist, "update-transaction.js"), "utf8"), { filename: "update-transaction.js" });
 new vm.Script(await readFile(path.join(dist, "updater.js"), "utf8"), { filename: "updater.js" });
 const panelCss = await readFile(path.join(dist, "styles.css"), "utf8");

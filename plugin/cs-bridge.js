@@ -58,6 +58,16 @@
       });
     },
 
+    /* Opens the account pages of the website in the user's real browser -
+     * a CEP panel has no address bar of its own. */
+    openURL: function (address) {
+      if (global.cep && global.cep.util && global.cep.util.openURLInDefaultBrowser) {
+        global.cep.util.openURLInDefaultBrowser(address);
+        return;
+      }
+      global.open(address, '_blank');
+    },
+
     extensionPath: function () {
       if (!cepAvailable) return '';
       try {

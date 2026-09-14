@@ -22,9 +22,22 @@ CEP also keeps the panel usable on Premiere releases before the current UXP surf
 5. `src/audio/matched-sfx.ts` mixes edited recordings into a peak-safe 48 kHz stereo WAV. Cue times use the same seconds, stagger, word counts, and transition phases as the renderer. `src/audio/sample-catalog.ts` assigns a suitable sound to each preset.
 6. `src/premiere/workflow.ts` creates immutable versioned media and delegates the host edit to `src/premiere/host.ts`.
 7. `src/premiere/host.ts` serializes requests to `jsx/host.jsx`. The host script validates the active sequence, duration, files, lock state, and occupied range before importing or overwriting anything.
-8. `plugin/updater.js` checks Motion Plug's public release manifest without credentials. It verifies the updater ZIP's SHA-256 digest before extraction. `plugin/update-transaction.js` validates a complete sibling tree and atomically swaps it into place with rollback.
+8. `plugin/license.js` signs the machine in to the customer's captionplug.com account, which holds both the Caption Plug and Motion Plug entitlements. It posts to `/api/plugin/signin` with `product: "motion_plug"`, caches the returned license key, machine hash, and server-minted activation signature in `~/.motionplug`, and revalidates in the background at most once a day. Only an explicit 403 — a refund-revoked license, or a slot freed from the account page — signs a machine out; every other failure leaves a paying user working. The password is never stored.
+9. `plugin/updater.js` checks Motion Plug's public release manifest without credentials. It verifies the updater ZIP's SHA-256 digest before extraction. `plugin/update-transaction.js` validates a complete sibling tree and atomically swaps it into place with rollback.
 
 The sequence ID and playhead frame are captured before rendering. A changed sequence aborts the host edit. Frame positions cross the CEP boundary as integers and are converted to Premiere ticks with the active sequence timebase.
+
+## Account gate
+
+Browsing, previewing, and auditioning presets never require an account. Only
+`runWorkflow` — Add to timeline and Update selected — calls `requireAccount()`,
+so a signed-out panel stays fully explorable and the sign-in overlay appears at
+the moment output is actually requested. The overlay is dismissable for the same
+reason.
+
+The account layer is skipped entirely where it cannot work: outside Premiere,
+and in a CEP panel whose Node runtime is unavailable. That keeps a
+misconfigured host from showing a sign-in wall nobody can pass.
 
 ## Add and update safety
 

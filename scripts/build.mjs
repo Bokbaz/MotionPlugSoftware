@@ -45,6 +45,7 @@ await Promise.all([
   cp(path.join(root, "plugin", "index.html"), path.join(dist, "index.html")),
   cp(path.join(root, "plugin", "cs-bridge.js"), path.join(dist, "cs-bridge.js")),
   cp(path.join(root, "plugin", "version.js"), path.join(dist, "version.js")),
+  cp(path.join(root, "plugin", "license.js"), path.join(dist, "license.js")),
   cp(path.join(root, "plugin", "update-transaction.js"), path.join(dist, "update-transaction.js")),
   cp(path.join(root, "plugin", "updater.js"), path.join(dist, "updater.js")),
   cp(path.join(root, "plugin", "renderer.html"), path.join(dist, "renderer.html")),

@@ -23,12 +23,12 @@ function write(root: string, file: string, contents = "runtime"): void {
 
 function writePanel(root: string, version: string, marker: string): void {
   write(root, "CSXS/manifest.xml", `<ExtensionManifest ExtensionBundleId="com.motionplug" ExtensionBundleVersion="${version}"><ExtensionList><Extension Id="com.motionplug.panel" Version="${version}"/></ExtensionList></ExtensionManifest>`);
-  write(root, "index.html", '<link rel="stylesheet" href="styles.css"><script src="cs-bridge.js"></script><script src="version.js"></script><script src="update-transaction.js"></script><script src="updater.js"></script><script src="main.js"></script>');
+  write(root, "index.html", '<link rel="stylesheet" href="styles.css"><script src="cs-bridge.js"></script><script src="version.js"></script><script src="license.js"></script><script src="update-transaction.js"></script><script src="updater.js"></script><script src="main.js"></script>');
   write(root, "renderer.html", '<script src="renderer.js"></script>');
   write(root, "styles.css", '@font-face { src: url("fonts/inter.woff2"); }');
   write(root, "fonts/inter.woff2");
   write(root, "version.js", `window.MP_VERSION = '${version}';`);
-  for (const file of ["cs-bridge.js", "update-transaction.js", "updater.js", "main.js", "renderer.js", "jsx/host.jsx"]) write(root, file, marker);
+  for (const file of ["cs-bridge.js", "license.js", "update-transaction.js", "updater.js", "main.js", "renderer.js", "jsx/host.jsx"]) write(root, file, marker);
   write(root, "catalog.json", JSON.stringify([{ id: "motionplug.test.v1", sfx: { sample: "soft" } }]));
   write(root, "previews/motionplug.test.v1.jpg");
   write(root, "previews/motionplug.test.v1.mp4");

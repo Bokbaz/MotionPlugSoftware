@@ -1,6 +1,9 @@
 # Releasing Motion Plug
 
-Motion Plug follows the same release shape as Caption Plug while keeping updates completely public and account-free.
+Motion Plug follows the same release shape as Caption Plug. Updates stay
+completely public and account-free — the updater sends no credentials and
+verifies a SHA-256 — even though the panel itself now signs in to a
+captionplug.com account for its licensed actions.
 
 ## Build locally
 

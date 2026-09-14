@@ -18,6 +18,7 @@
     'index.html',
     'cs-bridge.js',
     'version.js',
+    'license.js',
     'update-transaction.js',
     'updater.js',
     'main.js',
